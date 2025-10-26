@@ -1,5 +1,6 @@
 {
       "name": "Recipe Recommendation App",
+      "homepage": "https://L1cense.github.io/Chef-Circle",
       "version": "0.1.0",
       "private": true,
       "dependencies": {
@@ -35,7 +36,6 @@
             "clsx": "*",
             "cmdk": "^1.1.1",
             "embla-carousel-react": "^8.6.0",
-            "gh-pages": "^6.3.0",
             "hono": "*",
             "input-otp": "^1.4.2",
             "lucide-react": "^0.487.0",
@@ -58,6 +58,10 @@
       },
       "scripts": {
             "dev": "vite",
-            "build": "vite build"
+            "prebuild": "chmod +x node_modules/.bin/vite",
+            "build": "vite build",
+            "predeploy": "npm run build",
+            "deploy": "gh-pages -d build",
+            "preview": "vite preview"
       }
 }
