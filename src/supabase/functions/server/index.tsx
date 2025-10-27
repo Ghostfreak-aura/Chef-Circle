@@ -6,16 +6,15 @@ import * as kv from "./kv_store.tsx";
 
 const app = new Hono();
 
-// Create Supabase client
+
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
 
-// Enable logger
+
 app.use("*", logger(console.log));
 
-// Enable CORS for all routes and methods
 app.use(
   "/*",
   cors({
