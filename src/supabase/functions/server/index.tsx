@@ -6,16 +6,15 @@ import * as kv from "./kv_store.tsx";
 
 const app = new Hono();
 
-// Create Supabase client
+
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
 
-// Enable logger
 app.use("*", logger(console.log));
 
-// Enable CORS for all routes and methods
+
 app.use(
   "/*",
   cors({
@@ -27,7 +26,7 @@ app.use(
   })
 );
 
-// Helper function to get user from access token
+
 async function getUserFromToken(request: Request) {
   const accessToken = request.headers.get("Authorization")?.split(" ")[1];
   if (!accessToken) {
@@ -40,30 +39,30 @@ async function getUserFromToken(request: Request) {
   return user;
 }
 
-// Helper function to generate ID
+
 function generateId() {
   return crypto.randomUUID();
 }
 
-// Health check endpoint
+
 app.get("/make-server-7d67a39c/health", (c) => {
   return c.json({ status: "ok" });
 });
 
-// ============ AUTH ROUTES ============
 
-// Sign up
+
+
 app.post("/make-server-7d67a39c/auth/signup", async (c) => {
   try {
     const body = await c.req.json();
     const { email, password, name, dietaryPreferences, skillLevel, cuisinePreferences } = body;
 
-    // Create user in Supabase Auth
+
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
       user_metadata: { name },
-      // Automatically confirm the user's email since an email server hasn't been configured.
+    
       email_confirm: true,
     });
 
@@ -72,7 +71,7 @@ app.post("/make-server-7d67a39c/auth/signup", async (c) => {
       return c.json({ error: error.message }, 400);
     }
 
-    // Store additional user data in KV store
+   
     const userId = data.user.id;
     await kv.set(`user:${userId}`, {
       id: userId,
@@ -95,7 +94,7 @@ app.post("/make-server-7d67a39c/auth/signup", async (c) => {
   }
 });
 
-// Sign in
+
 app.post("/make-server-7d67a39c/auth/signin", async (c) => {
   try {
     const body = await c.req.json();
@@ -111,7 +110,7 @@ app.post("/make-server-7d67a39c/auth/signin", async (c) => {
       return c.json({ error: error.message }, 401);
     }
 
-    // Get user data from KV store
+  
     const userData = await kv.get(`user:${data.user.id}`);
 
     return c.json({
@@ -124,7 +123,7 @@ app.post("/make-server-7d67a39c/auth/signin", async (c) => {
   }
 });
 
-// Get current user
+
 app.get("/make-server-7d67a39c/auth/me", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -135,9 +134,7 @@ app.get("/make-server-7d67a39c/auth/me", async (c) => {
   return c.json({ user: userData || { id: user.id, email: user.email } });
 });
 
-// ============ RECIPE ROUTES ============
 
-// Get all recipes (with filters)
 app.get("/make-server-7d67a39c/recipes", async (c) => {
   try {
     const cuisine = c.req.query("cuisine");
@@ -174,7 +171,7 @@ app.get("/make-server-7d67a39c/recipes", async (c) => {
   }
 });
 
-// Get single recipe by ID
+
 app.get("/make-server-7d67a39c/recipes/:id", async (c) => {
   try {
     const id = c.req.param("id");
@@ -184,7 +181,7 @@ app.get("/make-server-7d67a39c/recipes/:id", async (c) => {
       return c.json({ error: "Recipe not found" }, 404);
     }
 
-    // Get comments for this recipe
+    
     const allComments = await kv.getByPrefix("recipe_comment:");
     const recipeComments = allComments.filter((comment: any) => comment.recipeId === id);
 
@@ -195,7 +192,6 @@ app.get("/make-server-7d67a39c/recipes/:id", async (c) => {
   }
 });
 
-// Create recipe (requires auth)
 app.post("/make-server-7d67a39c/recipes", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -224,7 +220,7 @@ app.post("/make-server-7d67a39c/recipes", async (c) => {
   }
 });
 
-// Update recipe (requires auth and ownership)
+
 app.put("/make-server-7d67a39c/recipes/:id", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -239,14 +235,12 @@ app.put("/make-server-7d67a39c/recipes/:id", async (c) => {
       return c.json({ error: "Recipe not found" }, 404);
     }
 
-    // Check if user is the creator
     if (recipe.createdBy !== user.id) {
       return c.json({ error: "Only the recipe creator can update it" }, 403);
     }
 
     const body = await c.req.json();
-    
-    // Update allowed fields
+
     const updatedRecipe = {
       ...recipe,
       title: body.title !== undefined ? body.title : recipe.title,
@@ -271,7 +265,7 @@ app.put("/make-server-7d67a39c/recipes/:id", async (c) => {
   }
 });
 
-// Delete recipe (requires auth and ownership)
+
 app.delete("/make-server-7d67a39c/recipes/:id", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -286,15 +280,15 @@ app.delete("/make-server-7d67a39c/recipes/:id", async (c) => {
       return c.json({ error: "Recipe not found" }, 404);
     }
 
-    // Check if user is the creator
+
     if (recipe.createdBy !== user.id) {
       return c.json({ error: "Only the recipe creator can delete it" }, 403);
     }
 
-    // Delete the recipe
+
     await kv.del(`recipe:${recipeId}`);
 
-    // Delete all comments for this recipe
+
     const allComments = await kv.getByPrefix("recipe_comment:");
     const recipeComments = allComments.filter((c: any) => c.recipeId === recipeId);
     for (const comment of recipeComments) {
@@ -308,7 +302,7 @@ app.delete("/make-server-7d67a39c/recipes/:id", async (c) => {
   }
 });
 
-// Add comment/rating to recipe (requires auth)
+
 app.post("/make-server-7d67a39c/recipes/:id/comments", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -335,7 +329,7 @@ app.post("/make-server-7d67a39c/recipes/:id/comments", async (c) => {
 
     await kv.set(`recipe_comment:${commentId}`, comment);
 
-    // Update recipe rating
+
     const recipe = await kv.get(`recipe:${recipeId}`);
     if (recipe) {
       const allComments = await kv.getByPrefix("recipe_comment:");
@@ -356,15 +350,12 @@ app.post("/make-server-7d67a39c/recipes/:id/comments", async (c) => {
   }
 });
 
-// ============ COMMUNITY ROUTES ============
 
-// Get all communities
 app.get("/make-server-7d67a39c/communities", async (c) => {
   try {
     const user = await getUserFromToken(c.req.raw);
     const communities = await kv.getByPrefix("community:");
-    
-    // Check which communities user has joined
+  
     if (user) {
       const memberships = await kv.getByPrefix(`community_member:${user.id}:`);
       const joinedCommunityIds = memberships.map((m: any) => m.communityId);
@@ -384,7 +375,7 @@ app.get("/make-server-7d67a39c/communities", async (c) => {
   }
 });
 
-// Get single community
+
 app.get("/make-server-7d67a39c/communities/:id", async (c) => {
   try {
     const id = c.req.param("id");
@@ -401,7 +392,7 @@ app.get("/make-server-7d67a39c/communities/:id", async (c) => {
   }
 });
 
-// Create community (requires auth)
+
 app.post("/make-server-7d67a39c/communities", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -428,7 +419,7 @@ app.post("/make-server-7d67a39c/communities", async (c) => {
 
     await kv.set(`community:${communityId}`, community);
     
-    // Auto-join creator to community
+
     await kv.set(`community_member:${user.id}:${communityId}`, {
       userId: user.id,
       communityId,
@@ -442,7 +433,7 @@ app.post("/make-server-7d67a39c/communities", async (c) => {
   }
 });
 
-// Join community (requires auth)
+
 app.post("/make-server-7d67a39c/communities/:id/join", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -457,7 +448,6 @@ app.post("/make-server-7d67a39c/communities/:id/join", async (c) => {
       return c.json({ error: "Community not found" }, 404);
     }
 
-    // Check if already joined
     const existing = await kv.get(`community_member:${user.id}:${communityId}`);
     if (existing) {
       return c.json({ message: "Already joined" });
@@ -469,7 +459,7 @@ app.post("/make-server-7d67a39c/communities/:id/join", async (c) => {
       joinedAt: new Date().toISOString(),
     });
 
-    // Update member count
+
     community.memberCount = (community.memberCount || 0) + 1;
     await kv.set(`community:${communityId}`, community);
 
@@ -497,7 +487,6 @@ app.post("/make-server-7d67a39c/communities/:id/leave", async (c) => {
 
     await kv.del(`community_member:${user.id}:${communityId}`);
 
-    // Update member count
     community.memberCount = Math.max(0, (community.memberCount || 0) - 1);
     await kv.set(`community:${communityId}`, community);
 
@@ -508,7 +497,7 @@ app.post("/make-server-7d67a39c/communities/:id/leave", async (c) => {
   }
 });
 
-// Update community (requires auth and ownership)
+
 app.put("/make-server-7d67a39c/communities/:id", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -523,7 +512,7 @@ app.put("/make-server-7d67a39c/communities/:id", async (c) => {
       return c.json({ error: "Community not found" }, 404);
     }
 
-    // Check if user is the creator
+
     const userData = await kv.get(`user:${user.id}`);
     const creatorName = userData?.name || user.email;
     
@@ -533,7 +522,7 @@ app.put("/make-server-7d67a39c/communities/:id", async (c) => {
 
     const body = await c.req.json();
     
-    // Update allowed fields
+
     const updatedCommunity = {
       ...community,
       name: body.name || community.name,
@@ -552,7 +541,7 @@ app.put("/make-server-7d67a39c/communities/:id", async (c) => {
   }
 });
 
-// Delete community (requires auth and ownership)
+
 app.delete("/make-server-7d67a39c/communities/:id", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -567,7 +556,7 @@ app.delete("/make-server-7d67a39c/communities/:id", async (c) => {
       return c.json({ error: "Community not found" }, 404);
     }
 
-    // Check if user is the creator
+
     const userData = await kv.get(`user:${user.id}`);
     const creatorName = userData?.name || user.email;
     
@@ -575,10 +564,10 @@ app.delete("/make-server-7d67a39c/communities/:id", async (c) => {
       return c.json({ error: "Only the community creator can delete it" }, 403);
     }
 
-    // Delete the community
+
     await kv.del(`community:${communityId}`);
 
-    // Delete all memberships
+
     const members = await kv.getByPrefix(`community_member:`);
     for (const member of members) {
       if (member.communityId === communityId) {
@@ -586,21 +575,20 @@ app.delete("/make-server-7d67a39c/communities/:id", async (c) => {
       }
     }
 
-    // Delete all posts in the community
+
     const posts = await kv.getByPrefix("community_post:");
     for (const post of posts) {
       if (post.communityId === communityId) {
         await kv.del(`community_post:${post.id}`);
         
-        // Delete post votes
+
         const votes = await kv.getByPrefix(`post_vote:`);
         for (const vote of votes) {
           if (vote.postId === post.id) {
             await kv.del(`post_vote:${vote.userId}:${vote.postId}`);
           }
         }
-        
-        // Delete post comments
+
         const comments = await kv.getByPrefix(`post_comment:${post.id}:`);
         for (const comment of comments) {
           await kv.del(`post_comment:${post.id}:${comment.id}`);
@@ -615,13 +603,11 @@ app.delete("/make-server-7d67a39c/communities/:id", async (c) => {
   }
 });
 
-// ============ COMMUNITY POST ROUTES ============
 
-// Get posts (all or filtered by community)
 app.get("/make-server-7d67a39c/posts", async (c) => {
   try {
     const communityId = c.req.query("communityId");
-    const sortBy = c.req.query("sort") || "hot"; // hot, new, top
+    const sortBy = c.req.query("sort") || "hot"; 
     
     let posts = await kv.getByPrefix("community_post:");
     
@@ -629,7 +615,7 @@ app.get("/make-server-7d67a39c/posts", async (c) => {
       posts = posts.filter((p: any) => p.communityId === communityId);
     }
 
-    // Get user votes if authenticated
+
     const user = await getUserFromToken(c.req.raw);
     if (user) {
       const userVotes = await kv.getByPrefix(`post_vote:${user.id}:`);
@@ -641,7 +627,7 @@ app.get("/make-server-7d67a39c/posts", async (c) => {
       }));
     }
 
-    // Sort posts
+
     if (sortBy === "hot") {
       posts.sort((a: any, b: any) => {
         const scoreA = a.upvotes - a.downvotes;
@@ -663,7 +649,6 @@ app.get("/make-server-7d67a39c/posts", async (c) => {
   }
 });
 
-// Create post (requires auth)
 app.post("/make-server-7d67a39c/posts", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -690,7 +675,7 @@ app.post("/make-server-7d67a39c/posts", async (c) => {
       title: body.title,
       content: body.content,
       image: body.image || "",
-      timestamp: "Just now", // Human-readable timestamp
+      timestamp: "Just now",
       upvotes: 0,
       downvotes: 0,
       userVote: null,
@@ -701,7 +686,6 @@ app.post("/make-server-7d67a39c/posts", async (c) => {
 
     await kv.set(`community_post:${postId}`, post);
 
-    // Update community post count
     if (community) {
       community.postCount = (community.postCount || 0) + 1;
       await kv.set(`community:${body.communityId}`, community);
@@ -714,7 +698,7 @@ app.post("/make-server-7d67a39c/posts", async (c) => {
   }
 });
 
-// Vote on post (requires auth)
+
 app.post("/make-server-7d67a39c/posts/:id/vote", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -724,25 +708,24 @@ app.post("/make-server-7d67a39c/posts/:id/vote", async (c) => {
   try {
     const postId = c.req.param("id");
     const body = await c.req.json();
-    const voteType = body.voteType; // "up" or "down"
+    const voteType = body.voteType; 
     
     const post = await kv.get(`community_post:${postId}`);
     if (!post) {
       return c.json({ error: "Post not found" }, 404);
     }
 
-    // Get existing vote
     const existingVote = await kv.get(`post_vote:${user.id}:${postId}`);
     
     if (existingVote) {
-      // Remove old vote count
+
       if (existingVote.voteType === "up") {
         post.upvotes = Math.max(0, post.upvotes - 1);
       } else {
         post.downvotes = Math.max(0, post.downvotes - 1);
       }
       
-      // If clicking same vote, remove it
+
       if (existingVote.voteType === voteType) {
         await kv.del(`post_vote:${user.id}:${postId}`);
         await kv.set(`community_post:${postId}`, post);
@@ -750,7 +733,7 @@ app.post("/make-server-7d67a39c/posts/:id/vote", async (c) => {
       }
     }
 
-    // Add new vote
+
     if (voteType === "up") {
       post.upvotes = (post.upvotes || 0) + 1;
     } else {
@@ -773,7 +756,7 @@ app.post("/make-server-7d67a39c/posts/:id/vote", async (c) => {
   }
 });
 
-// Add comment to post (requires auth)
+
 app.post("/make-server-7d67a39c/posts/:id/comments", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -802,7 +785,7 @@ app.post("/make-server-7d67a39c/posts/:id/comments", async (c) => {
 
     await kv.set(`post_comment:${commentId}`, comment);
 
-    // Update post comment count
+
     const post = await kv.get(`community_post:${postId}`);
     if (post) {
       post.comments = (post.comments || 0) + 1;
@@ -816,7 +799,7 @@ app.post("/make-server-7d67a39c/posts/:id/comments", async (c) => {
   }
 });
 
-// Delete post (requires auth - only post author can delete)
+
 app.delete("/make-server-7d67a39c/posts/:id", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -831,29 +814,27 @@ app.delete("/make-server-7d67a39c/posts/:id", async (c) => {
       return c.json({ error: "Post not found" }, 404);
     }
 
-    // Check if user is the author
+
     if (post.userId !== user.id) {
       return c.json({ error: "You can only delete your own posts" }, 403);
     }
 
-    // Delete the post
     await kv.del(`community_post:${postId}`);
 
-    // Delete all comments for this post
+
     const allComments = await kv.getByPrefix("post_comment:");
     const postComments = allComments.filter((c: any) => c.postId === postId);
     for (const comment of postComments) {
       await kv.del(`post_comment:${comment.id}`);
     }
 
-    // Delete all votes for this post
+
     const allVotes = await kv.getByPrefix("post_vote:");
     const postVotes = allVotes.filter((v: any) => v.postId === postId);
     for (const vote of postVotes) {
       await kv.del(`post_vote:${vote.userId}:${postId}`);
     }
 
-    // Update community post count
     const community = await kv.get(`community:${post.communityId}`);
     if (community) {
       community.postCount = Math.max(0, (community.postCount || 0) - 1);
@@ -867,7 +848,7 @@ app.delete("/make-server-7d67a39c/posts/:id", async (c) => {
   }
 });
 
-// Vote on comment (requires auth)
+
 app.post("/make-server-7d67a39c/comments/:id/vote", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -877,25 +858,25 @@ app.post("/make-server-7d67a39c/comments/:id/vote", async (c) => {
   try {
     const commentId = c.req.param("id");
     const body = await c.req.json();
-    const voteType = body.voteType; // "up" or "down"
+    const voteType = body.voteType;
     
     const comment = await kv.get(`post_comment:${commentId}`);
     if (!comment) {
       return c.json({ error: "Comment not found" }, 404);
     }
 
-    // Get existing vote
+
     const existingVote = await kv.get(`comment_vote:${user.id}:${commentId}`);
     
     if (existingVote) {
-      // Remove old vote count
+
       if (existingVote.voteType === "up") {
         comment.upvotes = Math.max(0, (comment.upvotes || 0) - 1);
       } else {
         comment.downvotes = Math.max(0, (comment.downvotes || 0) - 1);
       }
       
-      // If clicking same vote, remove it
+
       if (existingVote.voteType === voteType) {
         await kv.del(`comment_vote:${user.id}:${commentId}`);
         await kv.set(`post_comment:${commentId}`, comment);
@@ -903,7 +884,7 @@ app.post("/make-server-7d67a39c/comments/:id/vote", async (c) => {
       }
     }
 
-    // Add new vote
+
     if (voteType === "up") {
       comment.upvotes = (comment.upvotes || 0) + 1;
     } else {
@@ -926,7 +907,6 @@ app.post("/make-server-7d67a39c/comments/:id/vote", async (c) => {
   }
 });
 
-// Delete comment (requires auth - only comment author can delete)
 app.delete("/make-server-7d67a39c/comments/:id", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -941,22 +921,20 @@ app.delete("/make-server-7d67a39c/comments/:id", async (c) => {
       return c.json({ error: "Comment not found" }, 404);
     }
 
-    // Check if user is the author
+
     if (comment.userId !== user.id) {
       return c.json({ error: "You can only delete your own comments" }, 403);
     }
 
-    // Delete the comment
     await kv.del(`post_comment:${commentId}`);
 
-    // Delete all votes for this comment
+
     const allVotes = await kv.getByPrefix("comment_vote:");
     const commentVotes = allVotes.filter((v: any) => v.commentId === commentId);
     for (const vote of commentVotes) {
       await kv.del(`comment_vote:${vote.userId}:${commentId}`);
     }
 
-    // Update post comment count
     const post = await kv.get(`community_post:${comment.postId}`);
     if (post) {
       post.comments = Math.max(0, (post.comments || 0) - 1);
@@ -970,14 +948,14 @@ app.delete("/make-server-7d67a39c/comments/:id", async (c) => {
   }
 });
 
-// Get comments for post (with user vote status)
+
 app.get("/make-server-7d67a39c/posts/:id/comments", async (c) => {
   try {
     const postId = c.req.param("id");
     const allComments = await kv.getByPrefix("post_comment:");
     let postComments = allComments.filter((comment: any) => comment.postId === postId);
     
-    // Get user votes if authenticated
+
     const user = await getUserFromToken(c.req.raw);
     if (user) {
       const userVotes = await kv.getByPrefix(`comment_vote:${user.id}:`);
@@ -996,9 +974,6 @@ app.get("/make-server-7d67a39c/posts/:id/comments", async (c) => {
   }
 });
 
-// ============ USER SHARED RECIPES ============
-
-// Get user's shared recipes
 app.get("/make-server-7d67a39c/user-recipes", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -1006,18 +981,18 @@ app.get("/make-server-7d67a39c/user-recipes", async (c) => {
   }
 
   try {
-    // Get recipes from user_recipe: prefix (old shared recipes)
+ 
     const sharedRecipes = await kv.getByPrefix("user_recipe:");
     const userSharedRecipes = sharedRecipes.filter((r: any) => r.userId === user.id);
     
-    // Get recipes from recipe: prefix (recipes created in For You tab)
+   
     const allMainRecipes = await kv.getByPrefix("recipe:");
     const userMainRecipes = allMainRecipes.filter((r: any) => r.createdBy === user.id);
     
-    // Combine both types of recipes
+
     const allUserRecipes = [...userSharedRecipes, ...userMainRecipes];
     
-    // Sort by creation date (newest first)
+   
     allUserRecipes.sort((a: any, b: any) => 
       new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
     );
@@ -1029,7 +1004,7 @@ app.get("/make-server-7d67a39c/user-recipes", async (c) => {
   }
 });
 
-// Share a recipe (requires auth)
+
 app.post("/make-server-7d67a39c/user-recipes", async (c) => {
   const user = await getUserFromToken(c.req.raw);
   if (!user) {
@@ -1064,11 +1039,11 @@ app.post("/make-server-7d67a39c/user-recipes", async (c) => {
   }
 });
 
-// ============ SEED DATA ENDPOINT (for testing) ============
+
 
 app.post("/make-server-7d67a39c/seed", async (c) => {
   try {
-    // This endpoint will be called from the frontend to seed initial data
+   
     const body = await c.req.json();
     const { recipes, communities, posts } = body;
 
@@ -1076,7 +1051,7 @@ app.post("/make-server-7d67a39c/seed", async (c) => {
       for (const recipe of recipes) {
         await kv.set(`recipe:${recipe.id}`, recipe);
         
-        // Add comments
+ 
         if (recipe.comments) {
           for (const comment of recipe.comments) {
             await kv.set(`recipe_comment:${comment.id}`, {
